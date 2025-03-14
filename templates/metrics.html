@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>System Metrics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">System Metrics</h1>
+            <a href="/logs" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
+                View Logs
+            </a>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- Charts -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <canvas id="cpuChart"></canvas>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4">
+                <canvas id="memoryChart"></canvas>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">Memory</h2>
+                <div id="memUsage" class="text-2xl font-bold text-blue-600"></div>
+                <div id="totalMem" class="text-sm text-gray-600 mt-2"></div>
+                <div id="freeMem" class="text-sm text-gray-600"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">CPU</h2>
+                <div id="cpuUsage" class="text-2xl font-bold text-green-600"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">Uptime</h2>
+                <div id="uptime" class="text-2xl font-bold text-purple-600"></div>
+            </div>
+        </div>
+
+        <!-- Host Info -->
+        <div class="bg-white rounded-lg shadow p-6 mt-6">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4">Host Information</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div id="hostname" class="text-sm text-gray-600"></div>
+                <div id="platform" class="text-sm text-gray-600"></div>
+                <div id="os" class="text-sm text-gray-600"></div>
+                <div id="kernelArch" class="text-sm text-gray-600"></div>
+            </div>
+        </div>
+
+        <!-- CPU Cores -->
+        <div class="bg-white rounded-lg shadow p-6 mt-6">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4">CPU Cores</h2>
+            <div id="cpuCores" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            </div>
+        </div>
+
+        <!-- Disk Usage -->
+        <div class="bg-white rounded-lg shadow p-6 mt-6">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4">Disk Usage</h2>
+            <div id="diskUsage" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            </div>
+        </div>
+
+        <!-- Network IO -->
+        <div class="bg-white rounded-lg shadow p-6 mt-6">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4">Network I/O</h2>
+            <div id="networkIO" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const maxDataPoints = 60;
+    const cpuData = Array(maxDataPoints).fill(0);
+    const memData = Array(maxDataPoints).fill(0);
+    const labels = Array(maxDataPoints).fill('');
+
+    const cpuChart = new Chart(document.getElementById('cpuChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'CPU Usage %',
+                data: cpuData,
+                borderColor: 'rgb(34, 197, 94)',
+                tension: 0.3,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            animation: false
+        }
+    });
+
+    const memoryChart = new Chart(document.getElementById('memoryChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Memory Usage %',
+                data: memData,
+                borderColor: 'rgb(59, 130, 246)',
+                tension: 0.3,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            animation: false
+        }
+    });
+
+    function getUsageColor(usage) {
+        if (usage < 60) return 'bg-green-500';
+        if (usage < 80) return 'bg-yellow-500';
+        return 'bg-red-500';
+    }
+
+    function updateMetrics() {
+        fetch('/metrics')
+            .then(response => response.json())
+            .then(data => {
+                // Update charts
+                cpuData.push(data.cpuUsage);
+                cpuData.shift();
+                memData.push(data.memoryUsage);
+                memData.shift();
+                cpuChart.update();
+                memoryChart.update();
+
+                // Update metrics
+                document.getElementById('memUsage').textContent = data.memoryUsage.toFixed(2) + '%';
+                document.getElementById('cpuUsage').textContent = data.cpuUsage.toFixed(2) + '%';
+                document.getElementById('totalMem').textContent = 'Total: ' + data.formattedTotal;
+                document.getElementById('freeMem').textContent = 'Free: ' + data.formattedFree;
+                document.getElementById('uptime').textContent = 
+                    data.uptimeHours + 'h ' + data.uptimeMinutes + 'm ' + data.uptimeSeconds + 's';
+
+                // Update host info
+                document.getElementById('hostname').textContent = `Hostname: ${data.hostname}`;
+                document.getElementById('platform').textContent = `Platform: ${data.platform}`;
+                document.getElementById('os').textContent = `OS: ${data.os}`;
+                document.getElementById('kernelArch').textContent = `Architecture: ${data.kernelArch}`;
+
+                // Update CPU cores with progress bars
+                const coresContainer = document.getElementById('cpuCores');
+                coresContainer.innerHTML = data.cpuCores.map((usage, index) => `
+                    <div class="p-4 border rounded">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-gray-700">Core ${index}</span>
+                            <span class="text-sm text-gray-700">${usage.toFixed(2)}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="${getUsageColor(usage)} h-2.5 rounded-full transition-all duration-500"
+                                 style="width: ${usage}%">
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+                // Update disk usage - sort by usage percentage
+                const diskContainer = document.getElementById('diskUsage');
+                const sortedDisks = Object.entries(data.diskUsage)
+                    .sort((a, b) => b[1].usedPercent - a[1].usedPercent);
+                
+                diskContainer.innerHTML = sortedDisks.map(([path, info]) => `
+                    <div class="p-4 border rounded">
+                        <div class="flex justify-between mb-1">
+                            <span class="font-semibold">${path}</span>
+                            <span class="text-sm text-gray-700">${info.usedPercent.toFixed(2)}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                            <div class="${getUsageColor(info.usedPercent)} h-2.5 rounded-full transition-all duration-500"
+                                 style="width: ${info.usedPercent}%">
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-600">Total: ${info.total}</div>
+                        <div class="text-sm text-gray-600">Used: ${info.used}</div>
+                    </div>
+                `).join('');
+
+                // Update network IO - sort by total bytes (sent + received)
+                const netContainer = document.getElementById('networkIO');
+                const sortedNetwork = Object.entries(data.networkIO)
+                    .map(([iface, info]) => ({
+                        iface,
+                        info,
+                        // Convert human readable sizes back to numbers for sorting
+                        totalBytes: parseInt(info.packetsSent) + parseInt(info.packetsRecv)
+                    }))
+                    .sort((a, b) => b.totalBytes - a.totalBytes);
+
+                netContainer.innerHTML = sortedNetwork.map(({iface, info}) => `
+                    <div class="p-4 border rounded">
+                        <div class="font-semibold mb-2">${iface}</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="bg-blue-50 p-2 rounded">
+                                <div class="text-xs text-gray-500">Sent</div>
+                                <div class="text-sm text-gray-700">${info.bytesSent}</div>
+                                <div class="text-xs text-gray-500">${info.packetsSent} packets</div>
+                            </div>
+                            <div class="bg-green-50 p-2 rounded">
+                                <div class="text-xs text-gray-500">Received</div>
+                                <div class="text-sm text-gray-700">${info.bytesRecv}</div>
+                                <div class="text-xs text-gray-500">${info.packetsRecv} packets</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            });
+    }
+
+    setInterval(updateMetrics, 1000);
+    updateMetrics();
+    </script>
+</body>
+</html>

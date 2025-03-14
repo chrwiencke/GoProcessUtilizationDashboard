@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Low Priority Logs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Low Priority Logs</h1>
+            <a href="/" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
+                Back to Dashboard
+            </a>
+        </div>
+
+        <div class="bg-white rounded-lg shadow">
+            <div class="border-b">
+                <nav class="flex" aria-label="Tabs">
+                    <a href="/logs" class="px-6 py-4 text-gray-500 hover:text-gray-700 font-medium">
+                        All Logs
+                    </a>
+                    <a href="/logs/high" class="px-6 py-4 text-gray-500 hover:text-gray-700 font-medium">
+                        High Priority
+                    </a>
+                    <a href="/logs/medium" class="px-6 py-4 text-gray-500 hover:text-gray-700 font-medium">
+                        Medium Priority
+                    </a>
+                    <a href="/logs/low" class="px-6 py-4 text-blue-600 border-b-2 border-blue-600 font-medium">
+                        Low Priority
+                    </a>
+                </nav>
+            </div>
+            
+            <div id="logs-container" class="p-6">
+                <!-- Logs will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function formatDate(timestamp) {
+        return new Date(timestamp).toLocaleString();
+    }
+
+    function loadLogs() {
+        fetch('/api/logs/low')
+            .then(response => response.json())
+            .then(logs => {
+                document.getElementById('logs-container').innerHTML = logs
+                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                    .map(log => `
+                        <div class="mb-4 p-4 rounded bg-green-50">
+                            <div class="flex justify-between">
+                                <span class="font-medium">LOW</span>
+                                <span class="text-gray-600">${formatDate(log.timestamp)}</span>
+                            </div>
+                            <div class="mt-2">${log.message}</div>
+                        </div>
+                    `).join('');
+            });
+    }
+
+    loadLogs();
+    setInterval(loadLogs, 5000);
+    </script>
+</body>
+</html>
