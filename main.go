@@ -17,6 +17,7 @@ import (
     "strings"
     "runtime"
     "sort"
+    "html/template"
 )
 
 type Metrics struct {
@@ -122,9 +123,63 @@ func readSystemLogs() ([]LogEntry, error) {
     return logs, nil
 }
 
+func calculateCPUPercentage() ([]float64, error) {
+    // Get initial CPU sample
+    initialCPUTimes, err := cpu.Times(true)
+    if err != nil {
+        return nil, err
+    }
+
+    // Wait for a short duration
+    time.Sleep(500 * time.Millisecond)
+
+    // Get second CPU sample
+    finalCPUTimes, err := cpu.Times(true)
+    if err != nil {
+        return nil, err
+    }
+
+    // Calculate percentage for each core
+    var percentages []float64
+    for i, initialCPU := range initialCPUTimes {
+        if i >= len(finalCPUTimes) {
+            break
+        }
+        finalCPU := finalCPUTimes[i]
+        
+        initialTotal := initialCPU.Total()
+        finalTotal := finalCPU.Total()
+        
+        if finalTotal-initialTotal == 0 {
+            percentages = append(percentages, 0.0)
+            continue
+        }
+        
+        deltaIdle := finalCPU.Idle - initialCPU.Idle
+        deltaTotal := finalTotal - initialTotal
+        cpuUsed := 100 * (1.0 - (deltaIdle / deltaTotal))
+        percentages = append(percentages, cpuUsed)
+    }
+    
+    return percentages, nil
+}
+
 func getMetrics() Metrics {
     v, _ := mem.VirtualMemory()
-    c, _ := cpu.Percent(time.Second, true)
+    cpuPercentages, err := calculateCPUPercentage()
+    if err != nil {
+        log.Error().Err(err).Msg("Failed to get CPU usage")
+        cpuPercentages = []float64{0.0} // fallback value
+    }
+    
+    var avgCPU float64
+    if len(cpuPercentages) > 0 {
+        for _, p := range cpuPercentages {
+            avgCPU += p
+        }
+        avgCPU /= float64(len(cpuPercentages))
+    }
+    
     uptime, _ := host.Uptime()
     hostname, _ := host.Info()
     
@@ -162,7 +217,7 @@ func getMetrics() Metrics {
 
     return Metrics{
         MemoryUsage:    v.UsedPercent,
-        CPUUsage:       c[0],
+        CPUUsage:       avgCPU,
         FormattedTotal: humanize.Bytes(v.Total),
         FormattedFree:  humanize.Bytes(v.Free),
         UptimeHours:    uptime / 3600,
@@ -172,7 +227,7 @@ func getMetrics() Metrics {
         Platform:       hostname.Platform,
         OS:             hostname.OS,
         KernelArch:     hostname.KernelArch,
-        CPUCores:       c,
+        CPUCores:       cpuPercentages,
         DiskUsage:      diskUsage,
         NetworkIO:      netIO,
     }
@@ -204,7 +259,10 @@ func readLogs(priority string) ([]LogEntry, error) {
 
 func main() {
     r := gin.Default()
-    r.LoadHTMLGlob("templates/*")
+    
+    // Replace LoadHTMLGlob with LoadHTMLFS
+    tmpl := template.Must(template.New("").ParseFS(templates, "templates/*"))
+    r.SetHTMLTemplate(tmpl)
 
     r.GET("/", func(c *gin.Context) {
         c.HTML(http.StatusOK, "metrics.html", getMetrics())
